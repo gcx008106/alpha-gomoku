@@ -1,3 +1,11 @@
+#!/usr/bin/env python2
+# -*- coding: utf-8 -*-
+"""
+Created on Sat Apr  8 15:56:23 2017
+
+@author: takashi
+"""
+
 # class represents a state of a tic tac toe game.
 # 0 represents an unfilled square
 # 1 represents an X
@@ -28,12 +36,13 @@ class ExperimentGenerator:
     boardSize = 8
 
     
-    def __init__(self):
+    def __init__(self,xdim):
         self.board = self.generateBoard()
         self.history = [copy.deepcopy(self.board)]
         self.log = logging.getLogger(' ExperimentGenerator')
         self.log.setLevel(logging.DEBUG) 
         self.log.addHandler(handler)
+        self.xdim = xdim
 
     def setBoard(self,board):
         if board == 0:
@@ -52,11 +61,15 @@ class ExperimentGenerator:
                 row.append(0)
             board.append(row)
         return board
+    
+
+        
 
     def getWinner(self, board = 0):
         if board == 0:
             board = self.board
 
+        #print "getWinner\n",board
         if self.isDone(board):
             
             possibilities = []
@@ -73,42 +86,58 @@ class ExperimentGenerator:
                 for land in lands:
                     if len(land)==5 and land[0]!=0:
                         return land[0]
-            return 0
-
+            return 0  #No 5 with game being done means draw.
         else:
             print "Game not done, cannot determine winner"
+            return -1
+ 
 
     def isDone(self, board = 0):
         if board == 0:
             board = self.board
 
-        done = 0
-                            
-        possibilities = []
-        for row in self.getRows(board):
-            possibilities.append(row)
-        for column in self.getColumns(board):
-            possibilities.append(column)
-        for diagonal in self.getDiagonals(board):
-            possibilities.append(diagonal)
-            
-        for possibility in possibilities:
-            lands = self.getLands(possibility)
-            #print "isDone()lands" , lands
-            for land in lands:
-                #print "isDone():" , land
-                if len(land)==5 and land[0]!=0:
-                    #print "isDone() 5!!!!!!"
-                    done = land[0]
+        done = False
+
+        noMoreSpace = True
+        for row in board:
+            for cell in row:
+                if cell == 0:
+                    noMoreSpace = False
                     
-                    
+        if noMoreSpace == True:
+            done = True
+        else:
+            possibilities = []
+            for row in self.getRows(board):
+                possibilities.append(row)
+            for column in self.getColumns(board):
+                possibilities.append(column)
+            for diagonal in self.getDiagonals(board):
+                possibilities.append(diagonal)
+                
+            for possibility in possibilities:
+                lands = self.getLands(possibility)
+                #print "isDone()lands" , lands
+                for land in lands:
+                    #print "isDone():" , land
+                    if len(land)==5 and land[0]!=0:
+                        #print "isDone() 5!!!!!!"
+                        done = True
+                                       
         return done
+
+
+
+
+
+
 
     def getFeatures(self, board = 0):
         if board == 0:
             board = self.board
         
         possibilities = []
+        ls2=[]
         for row in self.getRows(board):
             possibilities.append([row,"row"])
         for column in self.getColumns(board):
@@ -146,9 +175,32 @@ class ExperimentGenerator:
                     else:
                         status = 0
                     landStatus.append([landMark, len(land), status,lineDirection])
-        ft=pd.DataFrame.from_records(landStatus,columns=("player","length","status","line"))
+                    ls2.append((landMark, len(land), status))
+        #print "landStatus\n",landStatus
+        #print "ls2\n",ls2
+                    
+        #boardSummary =pd.DataFrame.from_records(landStatus,columns=("player","length","status","line"))
+        #ft = boardSummary.groupby(['player','length', 'status']).size()
+        
+        
+        d = {}
+        for s in ls2:
+            #print "sssss",s
+            for j in self.xdim:
+                if j == s:      
+                    if d.get(s)==None:
+                        d[s]=1
+                        #print d
+                    else:
+                        d[s]+=1
+                        #print d
+        
+  
+        #bd2 = pd.DataFrame.from_records(ls2,columns=("state"))
+        #ft2 = bd2.groupby(["state"]).size()
+       
 
-        return ft        
+        return d       
 
 
 
@@ -170,39 +222,42 @@ class ExperimentGenerator:
 
         return columns
 
+
+    
     def getDiagonals(self,board = 0):
         if board == 0:
             board = self.board
 
+        boardSize = self.boardSize
         diagonals = []
-        for x in range(0, self.boardSize):
+        for x in range(0, boardSize):
             diagonal = []
             for y in range(0, x+1):
-                diagonal.append(self.board[x-y][ y])
+                diagonal.append(board[x-y][y])
                 
             #print diagonal
             diagonals.append(diagonal)
 
-        for x in range(1, self.boardSize):
+        for x in range(1, boardSize):
             diagonal = []
-            for y in range(0, self.boardSize-x):
-                diagonal.append(self.board[self.boardSize-y-1][x+y])
+            for y in range(0, boardSize-x):
+                diagonal.append(board[boardSize-y-1][x+y])
          
             #print diagonal
             diagonals.append(diagonal)
 
-        for x in range(0, self.boardSize):
+        for x in range(0, boardSize):
             diagonal = []
             for y in range(0, x+1):
-                diagonal.append(self.board[self.boardSize-y-1][x-y])
+                diagonal.append(board[boardSize-y-1][x-y])
         
             #print diagonal
             diagonals.append(diagonal)
             
-        for x in range(1, self.boardSize):
+        for x in range(1, boardSize):
             diagonal = []
-            for y in range(0, self.boardSize-x):
-                diagonal.append(self.board[y][x+y])
+            for y in range(0, boardSize-x):
+                diagonal.append(board[y][x+y])
         
             #print diagonal
             diagonals.append(diagonal)
@@ -246,6 +301,17 @@ class ExperimentGenerator:
                     successor[y][x] = 2
                     successors.append(successor)
         return successors
+
+    def noMoreSpaceO(self):
+        if len(self.getSuccessorsO())==0:
+            return 1
+        return 0
+    
+    def noMoreSpaceX(self):
+        if len(self.getSuccessorsX())==0:
+            return 1
+        return 0
+
 
     def getHistory(self):
         return self.history
@@ -292,7 +358,7 @@ class PerformanceSystem:
         self.game = game
         self.critic = critic
         self.mode = mode
-        self.checker = ExperimentGenerator()
+        self.checker = ExperimentGenerator(game.xdim)
         self.log = logging.getLogger(' PerformanceSystem')
         self.log.setLevel(logging.DEBUG) 
         self.log.addHandler(handler)
@@ -317,11 +383,11 @@ class PerformanceSystem:
 
         bestSuccessor = successors[0]
         ft = self.checker.getFeatures(bestSuccessor)
-        bestValue = self.critic.evaluateBoard(ft)
+        bestValue = self.critic.hypof(ft)
 
         for successor in successors:
             ft = self.checker.getFeatures(successor)
-            value = self.critic.evaluateBoard(ft)
+            value = self.critic.hypof(ft)
             
             ## you can check here how AI think about next move.
             #print "-----successor-----\n", successor
@@ -336,133 +402,101 @@ class PerformanceSystem:
             
 
 class Critic:
-    def __init__(self,hypothesis, updateConstant, mode = 1):
-        self.hypothesis = hypothesis
-        self.updateConstant = updateConstant
+    def __init__(self,theta, alpha, xdim, mode = 1):
+        self.theta = theta
+        self.alpha = alpha
         self.mode = mode
-        self.checker = ExperimentGenerator()
+        self.checker = ExperimentGenerator(xdim)
         self.log = logging.getLogger(' Critic')
         self.log.setLevel(logging.DEBUG) 
         self.log.addHandler(handler)
+        self.xdim = xdim
         
-    def setHypothesis(self,hypothesis):
-        self.hypothesis = hypothesis
+    def setHypothesis(self,theta):
+        self.theta = theta
         
     def getHypothesis(self):
-        return self.hypothesis
+        return self.theta
         
     def setMode(self,mode):
         self.mode = mode
 
     def getTrainingExamples(self,game):
-        trainingExamples = []
+        te = []
         history = game.history
-        chk = self.checker
+        c = self.checker
+        winner = c.getWinner(history[len(history)-1])
+
+        #print "getTrainingExample():winner:", winner
+
         for i in range(0,len(history)):
-            if(self.checker.isDone(history[i])):
-                if(self.checker.getWinner(history[i]) == self.mode):
-                    trainingExamples.append([chk.getFeatures(history[i]), 100])
-                elif(self.checker.getWinner(history[i]) == 0):
-                    trainingExamples.append([chk.getFeatures(history[i]), 0])
+            bi = history[i]
+            xi = c.getFeatures(bi)
+            #print "Board[i]\n", bi
+            #print "feature:", xi
+
+            if i >= len(history)-2:
+                if  winner == self.mode:
+                    score = 100
+                elif winner == 0:
+                    score = 0
                 else:
-                    trainingExamples.append([chk.getFeatures(history[i]), -100])
+                    score = -100
+                te.append([xi, score])
+                #print "close to the end:", score
             else:
-                if i+2 >= len(history):
-                    if(chk.getWinner(history[len(history)-1]) == 0):
-                        trainingExamples.append([chk.getFeatures(history[i]), 0])
-                    else:
-                        trainingExamples.append([chk.getFeatures(history[i]), -100])
-                else:
-                    trainingExamples.append([chk.getFeatures(history[i]), self.evaluateBoard(chk.getFeatures(history[i+2]))])
-        #t "trainingExamples:", trainingExamples
-        return trainingExamples
+                x2stepsAhead = c.getFeatures(history[i+2])
+                score = self.hypof(x2stepsAhead)
+                te.append([xi, score])
+                #print "2 step ahead:", score
+        #print "getTrainingExamples\n", te
+        return te
           
-    def evaluateBoard(self, ft):
+    def hypof(self, x):
         eval = 0
-        for row in ft.values:
-            #print row[0],row[1],row[2]
-            #print self.hypothesis[(row[0],row[1],row[2])]
-            eval += self.hypothesis[(row[0],row[1],row[2])]
+        for j,xj in x.items():
+            #print 'h[{}]={}'.format(j,self.theta[j])
+            eval += self.theta[j]*xj
         return eval
+  
+        
     
-    
-    def updateWeights(self,game):
+    def updateTheta(self,game):
+        a = self.alpha
         eval = 0
         ### seee it!!! len OK?
         trainingExamples = self.getTrainingExamples(game)
-
-        for i in range(0,len(trainingExamples)):
-            w = self.hypothesis
-            ft = trainingExamples[i][0] # already Feature!
-            #print "updateWeights()----------feature---------\n",ft
-            #vEst = w0 + w1*x1 + w2*x2 + w3*x3 + w4*x4 + w5*x5 + w6*x6
-            # ingored constant w0 
-            vEst = self.evaluateBoard(ft)
-            vTrain = trainingExamples[i][1]            
-
-            # w0 = w0 + self.updateConstant*(vTrain - vEst)
-            # ignored w0
-            for row in ft.values:
-                self.hypothesis[(row[0],row[1],row[2])] = self.hypothesis[(row[0],row[1],row[2])] + self.updateConstant*(vTrain - vEst)
-                        
-        #print "hypothesis updated"
+        m = len(trainingExamples)
         
-
-
- 
-#
-#board_test00 =[[1,0,0,0,0,0,0,0],
-#               [0,0,0,0,0,0,0,0],
-#               [0,0,0,0,0,0,0,0],
-#               [0,0,0,0,0,0,0,0],
-#               [0,0,0,0,0,0,0,0],
-#               [0,0,0,0,0,0,0,0],
-#               [0,0,0,0,0,0,0,0],
-#               [0,0,0,0,0,0,0,0]]
-#
-#board_test01 =[[1,0,0,0,0,0,0,2],
-#               [0,0,0,0,0,0,0,0],
-#               [0,0,0,0,0,0,0,0],
-#               [0,0,0,0,0,0,0,0],
-#               [0,0,0,0,0,0,0,0],
-#               [0,0,0,0,0,0,0,0],
-#               [0,0,0,0,0,0,0,0],
-#               [0,0,0,0,0,0,0,0]]
-#
-#board_test02 =[[1,1,0,0,0,0,0,2],
-#               [0,0,0,0,0,0,0,2],
-#               [0,0,0,0,0,0,0,0],
-#               [0,0,0,0,0,0,0,0],
-#               [0,0,0,0,0,0,0,0],
-#               [0,0,0,0,0,0,0,0],
-#               [0,0,0,0,0,0,0,0],
-#               [0,0,0,0,0,0,0,0]]     
-#
-#board_test03 =[[1,1,1,0,0,0,0,2],
-#               [1,1,0,0,0,0,0,2],
-#               [0,0,0,0,0,0,0,2],
-#               [0,0,0,0,0,0,0,2],
-#               [0,0,0,0,0,0,0,2],
-#               [0,0,0,0,0,0,0,0],
-#               [0,0,0,0,0,0,0,0],
-#               [0,0,0,0,0,0,0,0]] 
-#
-#
-#
-#b = ExperimentGenerator()
-#b.setBoard(board_test00)
-#b.setBoard(board_test01)
-#b.setBoard(board_test02)
-#b.setBoard(board_test03)
-#ft = b.getFeatures()
-#print ft
-#hyp1 = w0    
-#critic1 = Critic(board,hyp1,.1,1)
-#critic1.updateWeights()
-#print critic1.getHypothesis()
-#sys.exit(0)
-
-
+        tempTheta = {}
+             
+        for k in range(0,100): #here starts Gradient Decsent" 100 not so sure.
+            for j in self.xdim:
+                dJj=0
+                tempTheta[j] = self.theta[j]
+                for i in range(0,m): # i represents ith training example, means a board state after ith move).
+                    xi = trainingExamples[i][0] # xi dictionary object
+                    hi = self.hypof(xi)
+                    yi = trainingExamples[i][1]  
+                    if j == (0,0,0):
+                        xij = 1   # for theta0
+                    else:
+                        if xi.has_key(j):
+                            xij = xi[j]
+                        else:
+                            xij = 0
+                    
+                    # Prediction = Hypothesis * DataMatrix
+                    # DataMatrix = [X(1) X(2) ... X(m)] 
+                    #  where X(i)T = (1,xi(i),x2(i),x3(i),...xm(i))T  xij is ith training data of jth dimension
+                    # Parameters = (t0,t1,...tn)  belongs to Hypotheses space
+                    
+                    dJj += (hi-yi)*xij
+                tempTheta[j] = tempTheta[j] - a*dJj
+                #print "theta[{}]:{}".format(j,tempTheta[j])
+            for j in self.xdim:
+                self.theta[j] = tempTheta[j] # you need to update once.
+        #print "theta updated:", self.theta
              
 def main():   
 
@@ -475,20 +509,30 @@ def main():
         
     w ={}
     player = [1,2]
-    length = [1,2,3,4,5,6,7]
+    #length = [1,2,3,4,5,6,7,8]
+    length = [2,3,4]
     status = [0,1,2]
-     
+    
+    xdim = []
+    xdim.append((0,0,0))
     for p in player:
         for l in length:
             for s in status:
-                w[(p,l,s)]=.5
+                xdim.append((p,l,s))
+    #print "Xdim\n", xdim
+    
+    w[(0,0,0)]=1
+    for p in player:
+        for l in length:
+            for s in status:
+                w[(p,l,s)]=1
 
     
-    game = ExperimentGenerator()
+    game = ExperimentGenerator(xdim)
     hypothesis1 = w   
     hypothesis2 = w
-    critic1 = Critic(hypothesis1,.1,1)
-    critic2 = Critic(hypothesis1,.3,1)
+    critic1 = Critic(hypothesis1,.0001, xdim, 1)
+    critic2 = Critic(hypothesis1,.003, xdim, 2)
     player1 = PerformanceSystem(game,critic1,1)
     player2 = PerformanceSystem(game,critic2,2)
     
@@ -498,36 +542,45 @@ def main():
     draws = 0
 
     log.debug('learning from 100 games')    
-    for i in range(0,10):
+    for i in range(0,1):
         if i > 0:
-            game = ExperimentGenerator()
+            game = ExperimentGenerator(xdim)
             player1.setGame(game)
             player2.setGame(game)
         
-        while(not game.isDone()):
+        while(1):
              #player1.chooseRandom()
              player1.chooseMove()
              if game.isDone():
                  break
-             player2.chooseMove()
-             #player2.chooseRandom()
+             
+             player2.chooseRandom()
+             # Need a stronger player. Write move scenario.
+             if game.isDone():
+                 break 
+
+  
     
         game.printBoard()
+        #print "main1"
         winner = game.getWinner()
-        if(winner == 1):
+        #print "main2"
+        if winner == 1:
              print "X wins"
              xwins += 1
-        elif(winner == 2):
+        elif winner == 2:
              print "O wins"
              owins += 1
-        elif(winner == 0):
+        elif winner == 0:
              print "game is a draw"
              draws += 1
+             
+        #print "main3"
+        
+        critic1.updateTheta(game) 
+        #critic2.updateTheta(game)
     
-        critic1.updateWeights(game) 
-        critic2.updateWeights(game)
-    
-        log.debug("hypothesis:{}\n".format(critic1.getHypothesis()) )    
+        #log.debug("theta:{}\n".format(critic1.getHypothesis()) )    
     
         
     #log.close()
@@ -540,7 +593,7 @@ def main():
     owins = 0
     
     while True:
-        game = ExperimentGenerator()
+        game = ExperimentGenerator(xdim)
         player1.setGame(game)
         while(not game.isDone()):
             #board.printBoard()
@@ -581,7 +634,7 @@ def main():
         #critic1.setHypothesis(player1.getHypothesis())
         #critic2.setHypothesis(player2.getHypothesis())
     
-        critic1.updateWeights(game)
+        critic1.updateTheta(game)
     
 
     
